@@ -1,0 +1,10 @@
+*.o
+*.d
+*.asm
+*.sym
+*.img
+*.out
+.DS_Store
+.gdbinit
+kernel
+qemu.log
