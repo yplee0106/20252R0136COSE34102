@@ -218,7 +218,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  np->priority = p->priority; //child inherits parent's priority
+  np->priority = curproc->priority; //child inherits parent's priority
 
   release(&ptable.lock);
 
@@ -572,6 +572,7 @@ getnice(int pid)
             prior = p->priority;
 	    release(&ptable.lock);
 	    return prior;
+	}
     }
 
     release(&ptable.lock);
@@ -585,8 +586,9 @@ ps(void)
     acquire(&ptable.lock);
     cprintf("name\tpid\tppid\tmem\tprio\tstate\n");
 
+    //iterate through all processes, prrint out name, pid, parent pid, mem, priority, state
     for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-        if (p->pstate == UNUSED) continue;
+        if (p->state == UNUSED) continue;
 	        
 	const char *st;
 	switch (p->state) {
