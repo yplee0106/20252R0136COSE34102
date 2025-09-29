@@ -544,11 +544,16 @@ setnice(int pid, int nice)
         return -1;
 
     struct proc *p;
-    acquire(&ptable.lock);
+    acquire(&ptable.lock);    
 
-    /* ******************** */
-    /* * WRITE YOUR CODE    */
-    /* ******************** */
+    //search through ptable to find process with pid, change priority to nice value
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+	if (p->pid == pid) {
+	    p->priority = nice;
+	    release(&ptable.lock);
+	    return 0;
+	}
+    }
 
     release(&ptable.lock);
     return -1;
@@ -558,11 +563,16 @@ int
 getnice(int pid)
 {
     struct proc *p;
-    acquire(&ptable.lock);
-    
-    /* ******************** */
-    /* * WRITE YOUR CODE    */
-    /* ******************** */
+    acquire(&ptable.lock);    
+    int prior = -1;
+
+    //search through ptable to find process with pid, return its priority value
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+        if (p->pid == pid) {
+            prior = p->priority;
+	    release(&ptable.lock);
+	    return prior;
+    }
 
     release(&ptable.lock);
     return -1;
@@ -575,9 +585,22 @@ ps(void)
     acquire(&ptable.lock);
     cprintf("name\tpid\tppid\tmem\tprio\tstate\n");
 
-    /* ******************** */
-    /* * WRITE YOUR CODE    */
-    /* ******************** */
+    for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+        if (p->pstate == UNUSED) continue;
+	        
+	const char *st;
+	switch (p->state) {
+	    case EMBRYO: st = "EMBRYO"; break;
+	    case SLEEPING: st = "SLEEPING"; break;
+	    case RUNNABLE: st = "RUNNABLE"; break;
+	    case RUNNING: st = "RUNNING"; break;
+	    case ZOMBIE: st = "ZOMBIE"; break;
+	    default: st = "-1"; break;
+	}
+	
+	int ppid = p->parent ? p->parent->pid : -1;
+	cprintf("%s\t%d\t%d\t%d\t%d\t%s\n", p->name, p->pid, ppid, p->sz, p->priority, st);
+    }
 
     release(&ptable.lock);
     return;
