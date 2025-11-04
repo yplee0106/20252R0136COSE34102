@@ -14,6 +14,33 @@ struct {
 
 static struct proc *initproc;
 
+static struct proc *ready_head = 0;
+
+static void 
+ready_insert(struct proc *p)
+{
+  struct proc **pp = &ready_head;
+  while (*pp) {
+    if (p->priority < (*pp)->priority)
+      break;  //compare priority of ready queued process and inserting process
+    if (p->priority == (*pp)->priority && p->pid > (*pp)->pid)
+      break;  //tie breaker if same priority greater pid has priority
+    pp = &(*pp)->next_ready;  //move on to next process in ready queue
+  }
+
+  p->next_ready = *pp;  //link p with process with next priority
+  *pp = p;  //insert current process into ready queue
+}
+
+static struct proc *
+ready_pop(void)
+{
+  struct proc *p = ready_head;  //pop first proc from ready queue
+  if (p)
+    ready_head = p->next_ready; //link next proc to ready_head if queue is not empty
+  return p;
+}
+
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
@@ -88,6 +115,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->next_ready = 0;  //default 0 for next_ready in case it is last priority
 
   release(&ptable.lock);
 
@@ -224,6 +252,9 @@ fork(void)
   else
     np->priority = curproc->priority + 1;
 
+  np->next_ready = 0;
+  ready_insert(np);   //insert child process into ready queue
+
   release(&ptable.lock);
 
   return pid;
@@ -340,10 +371,15 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
 
+//    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+
+//      if(p->state != RUNNABLE)
+//        continue;
+
+    p = ready_pop();  //instead of going through ptable, pop the first one in ready queue
+
+    if (p) {
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
@@ -358,6 +394,8 @@ scheduler(void)
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
+//    }
+
     release(&ptable.lock);
 
   }
@@ -395,6 +433,8 @@ yield(void)
 {
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
+  p->next_ready = 0;
+  ready_insert(p);  //put process back in ready queue
   sched();
   release(&ptable.lock);
 }
@@ -470,6 +510,8 @@ wakeup1(void *chan)
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
     if(p->state == SLEEPING && p->chan == chan)
       p->state = RUNNABLE;
+      p->next_ready = 0;
+      ready_insert(p);    //insert process back into ready queue
 }
 
 // Wake up all processes sleeping on chan.
