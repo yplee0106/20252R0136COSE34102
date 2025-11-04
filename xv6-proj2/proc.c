@@ -179,6 +179,8 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  p->next_ready = 0;
+  ready_insert(p);    //insert process to ready queue
 
   release(&ptable.lock);
 }
@@ -256,6 +258,10 @@ fork(void)
   ready_insert(np);   //insert child process into ready queue
 
   release(&ptable.lock);
+
+  //if child priority is higher yeild
+  if (np->priority < curproc->priority)
+    yield();
 
   return pid;
 }
@@ -431,6 +437,7 @@ sched(void)
 void
 yield(void)
 {
+  struct proc *p = myproc();
   acquire(&ptable.lock);  //DOC: yieldlock
   myproc()->state = RUNNABLE;
   p->next_ready = 0;
@@ -508,10 +515,11 @@ wakeup1(void *chan)
   struct proc *p;
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan) {
       p->state = RUNNABLE;
       p->next_ready = 0;
       ready_insert(p);    //insert process back into ready queue
+    }
 }
 
 // Wake up all processes sleeping on chan.
