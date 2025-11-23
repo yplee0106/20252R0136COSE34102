@@ -71,6 +71,19 @@ kfree(char *v)
   if((uint)v % PGSIZE || v < end || V2P(v) >= PHYSTOP)
     panic("kfree");
 
+  uint pa = V2P(v);
+  uint rc = get_refcount(pa);
+
+  //don't free up page instead decrease reference count if page is shared
+  if (rc > 1) {
+    dec_refcount(pa);
+    return;
+  }
+
+  //free up if only one reference
+  if (rc == 1)
+    dec_refcount(pa);
+
   // Fill with junk to catch dangling refs.
   memset(v, 1, PGSIZE);
 
@@ -97,8 +110,10 @@ kalloc(void)
   if(kmem.use_lock)
     acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r) {
     kmem.freelist = r->next;
+    inc_refcount(V2P(r));    //increase reference to this physical page
+  }
 
   pmem.num_free_pages--;
 
