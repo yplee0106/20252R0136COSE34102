@@ -398,12 +398,64 @@ void
 page_fault(void)
 {
   uint va = rcr2();
-  if(va < 0) {
-    panic("Invalid access");
+  pte_t *pte;
+  uint pa, flags;
+  char *mem;
+  struct proc *p = myproc();
+
+  //find page start addr
+  va = PGROUNDDOWN(va);
+
+  if (p == 0)
+    panic("page_fault: no proc");
+
+  //check if valid addr
+  if (va >= p->sz) {
+    cprintf("page_fault: invalid address %p\n", va);
+    p->killed = 1;
     return;
   }
-  
-  return;
+
+  //find pte
+  pte = walkpgdir(p->pgdir, (void*)va, 0);
+  if (pte == 0 || !(*pte & PTE_P) || !(*pte & PTE_U)) {
+    cprintf("page_fault: bad pte\n");
+    p->killed = 1;
+    return;
+  }
+
+  pa = PTE_ADDR(*pte);
+  flags = PTE_FLAGS(*pte);
+
+
+  //if writable no need to COW
+  if (flags & PTE_W)
+    return;
+
+  //copy page if shared by different processes
+  if (get_refcount(pa) > 1) {
+    if ((mem = kalloc()) == 0) {
+      cprintf("page_fault: kalloc failed\n");
+      p->killed = 1;
+      return;
+    }
+
+    memmove(mem, (char*)P2V(pa), PGSIZE);
+
+
+    //decrease refcount for original
+    dec_refcount(pa);
+    //increase refcount for copy
+    inc_refcount(V2P(mem));
+
+    *pte = V2P(mem) | (flags | PTE_W);
+  } else {
+    //set to writable if not shared
+    *pte |= PTE_W;
+  }
+
+  //TLB flush since PTE were modified
+  lcr3(V2P(p->pgdir));
 }
 
 //PAGEBREAK!
